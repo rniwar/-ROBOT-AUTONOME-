@@ -1,0 +1,70 @@
+#include "DFMobile.h"
+#include "HUSKYLENS.h"
+#include "Wire.h"
+DFMobile car(4, 5, 7, 6);
+HUSKYLENS huskylens;
+const int objetID = 1; // ID de l'objet appris dans HuskyLens
+const int vitesseMax = 120;
+const int vitesseMin = 60;
+const int tailleMax = 80; // Taille estimée quand l'objet est proche
+const int tailleMin = 20; // Taille estimée quand l'objet est loin
+const int correctionBase = 40;
+const int centreGauche = 140;
+const int centreDroit = 180;
+void setup() {
+Serial.begin(9600);
+Wire.begin();
+
+car.Direction(false, false); // ← confirmé bon pour ton câblage
+
+while (!huskylens.begin(Wire)) {
+Serial.println("HuskyLens non détecté !");
+delay(100);
+}
+
+huskylens.writeAlgorithm(ALGORITHM_OBJECT_TRACKING);
+Serial.println("Mode : suivi d'objet (Object Tracking)");
+}
+void loop() {
+if (!huskylens.request()) {
+car.Speed(0, 0);
+return;
+}
+if (huskylens.countBlocks(objetID) > 0) {
+HUSKYLENSResult result = huskylens.getBlock(objetID, 0);
+int xCenter = result.xCenter;
+int largeurObjet = result.width; // Plus il est proche, plus la largeur augmente
+
+//  Calcul dynamique de la vitesse (ralentit quand l'objet est proche)
+int vitesse = map(largeurObjet, tailleMin, tailleMax, vitesseMax, vitesseMin);
+vitesse = constrain(vitesse, vitesseMin, vitesseMax);
+
+// Correction simple (tu peux tester PID plus tard)
+int correction = correctionBase;
+
+Serial.print("xCenter: ");
+Serial.print(xCenter);
+Serial.print(" | width: ");
+Serial.print(largeurObjet);
+Serial.print(" | vitesse: ");
+Serial.println(vitesse);
+
+if (xCenter < centreGauche) {
+// Objet à gauche
+car.Speed(-(vitesse - correction), -(vitesse + correction));
+}
+else if (xCenter > centreDroit) {
+// Objet à droite
+car.Speed(-(vitesse + correction), -(vitesse - correction));
+}
+else {
+// Objet centré
+car.Speed(-vitesse, -vitesse);
+}
+}
+else {
+// Aucun objet détecté
+car.Speed(0, 0);
+Serial.println("Objet perdu...");
+}
+}
